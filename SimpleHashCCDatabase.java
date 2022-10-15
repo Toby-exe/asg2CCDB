@@ -1,5 +1,6 @@
 public class SimpleHashCCDatabase implements CCDatabase {
 
+    int called = 0;
     float dataBaseEntries = 0;
     final private int notFound = -1;
     private int dataBaseSize = 101;
@@ -10,33 +11,25 @@ public class SimpleHashCCDatabase implements CCDatabase {
     public boolean createAccount(long accountNumber, String name, String address, double creditLimit, double balance) {
         // TODO Auto-generated method stub
 
-
-        boolean accountCreated = false;
         float loadFactor = (dataBaseSize * 0.6f);
+        boolean accountCreated = false;
 
+        if(dataBaseEntries + 1 > loadFactor) {
 
-
-        if(dataBaseEntries > loadFactor) {
             accountsTable = reSizeTable();
         }
 
-        if(search(accountNumber) == notFound) {
+        int insertAtIndex = search(accountNumber, accountsTable);
+
+        if(accountsTable[insertAtIndex] == null || accountsTable[insertAtIndex].isDeleted()) {
 
             BucketOpen openBucket = new BucketOpen(accountNumber, name, address, creditLimit, balance);
 
-
-            int hValue = simpleHash(accountNumber);
-
-            while(accountsTable[hValue] != null) {
-                hValue = (hValue + 1) % dataBaseSize;
-            }
-
-            accountsTable[hValue] = openBucket;
+            accountsTable[insertAtIndex] = openBucket;
             accountCreated = true;
             dataBaseEntries++;
 
             System.out.println("account " + (dataBaseEntries) + " created");
-
 
         }
 
@@ -48,10 +41,11 @@ public class SimpleHashCCDatabase implements CCDatabase {
     public boolean deleteAccount(long accountNumber) {
         // TODO Auto-generated method stub
         boolean accDeleted = false;
-        int accIndex = search(accountNumber);
+        int accIndex = search(accountNumber, accountsTable);
 
-        if (accIndex != notFound) {
-            System.out.println("deleting account... ");
+        System.out.println("*index from search* = " + accIndex);
+        if (accountsTable[accIndex] != null && !accountsTable[accIndex].isDeleted()) {
+            System.out.println("deleting account.................... ");
 
             accountsTable[accIndex].setDeleted(true);
             accDeleted = true;
@@ -59,7 +53,8 @@ public class SimpleHashCCDatabase implements CCDatabase {
         }
 
 
-        System.out.println("current DB size: " + dataBaseEntries);
+
+        System.out.println("current DB size: " + dataBaseEntries + "\n");
         return accDeleted;
     }
 
@@ -67,9 +62,9 @@ public class SimpleHashCCDatabase implements CCDatabase {
     public boolean adjustCreditLimit(long accountNumber, double newLimit) {
         // TODO Auto-generated method stub
         boolean ajusted = false;
-        int accIndex = search(accountNumber);
+        int accIndex = search(accountNumber, accountsTable);
 
-        if (accIndex != notFound) {
+        if (accountsTable[accIndex] != null && !accountsTable[accIndex].isDeleted()) {
             accountsTable[accIndex].setCreditlimit(newLimit);
             ajusted = true;
         }
@@ -80,12 +75,11 @@ public class SimpleHashCCDatabase implements CCDatabase {
     public String getAccount(long accountNumber) {
         // TODO Auto-generated method stub
 
-        int accIndex = search(accountNumber);
+        int accIndex = search(accountNumber, accountsTable);
 
         String userDetailString = null;
 
-        System.out.println(accIndex);
-        if (accIndex != notFound) {
+        if (accountsTable[accIndex] != null && !accountsTable[accIndex].isDeleted()) {
             userDetailString = accDetailsToString(accIndex);
         }
 
@@ -97,9 +91,9 @@ public class SimpleHashCCDatabase implements CCDatabase {
         // TODO Auto-generated method stub
         boolean purchaseMade = false;
 
-        int accIndex = search(accountNumber);
+        int accIndex = search(accountNumber, accountsTable);
 
-        if (accIndex != notFound) {
+        if (accountsTable[accIndex] != null && !accountsTable[accIndex].isDeleted()) {
             Double currentBalance = accountsTable[accIndex].getBalance();
 
             if(accountsTable[accIndex].getCreditlimit() >= (currentBalance + price)) {
@@ -118,13 +112,14 @@ public class SimpleHashCCDatabase implements CCDatabase {
 
         int hValue = -1;
 
-        short c4 = (short) (accountNumber % 1000);
-        accountNumber = accountNumber / 1000;
-        short c3 = (short) (accountNumber % 1000);
-        accountNumber = accountNumber / 1000;
-        short c2 = (short) (accountNumber % 1000);
-        accountNumber = accountNumber / 1000;
-        short c1 = (short) (accountNumber % 1000);
+        //THIS IS A PROBLEM
+        short c4 = (short) (accountNumber % 10000);
+        accountNumber = accountNumber / 10000;
+        short c3 = (short) (accountNumber % 10000);
+        accountNumber = accountNumber / 10000;
+        short c2 = (short) (accountNumber % 10000);
+        accountNumber = accountNumber / 10000;
+        short c1 = (short) (accountNumber % 10000);
 
         hValue = (int) (17 * c1 + Math.pow(17, 2) * c2 + Math.pow(17, 3) * c3 + Math.pow(17, 4) * c4);
         hValue %= dataBaseSize;
@@ -132,28 +127,32 @@ public class SimpleHashCCDatabase implements CCDatabase {
         return hValue;
     }
 
-    private int search(Long accountNumber) {
+    private int search(Long accountNumber, BucketOpen[] hashTable) {
 
         int hValue = simpleHash(accountNumber);
 
-        while(accountsTable[hValue] != null) {
+        int counter = 0;
+        int index = 0;
 
+        //System.out.println("searching using DB size: " + dataBaseSize);
+        while(counter < dataBaseSize) {
 
-            //look for an empty bucket
-           if(accountsTable[hValue].getAccountNumber() == accountNumber && !accountsTable[hValue].isDeleted()) {
-               return hValue;
+            index = (hValue + counter) % dataBaseSize;
+
+            //look for matching account
+            if(hashTable[index] == null || hashTable[index].isDeleted()) {
+                System.out.println("NOT FOUND");
+                return index;
+
+            }
+            if(hashTable[index].getAccountNumber() == accountNumber ) {
+                System.out.println("FOUND");
+                return index;
+
             }
 
 
-
-            //if this bucket is not empty check for matching account
-            //else if(accountsTable[hValue] == null || accountsTable[hValue].isDeleted()) {
-              //  return -1;
-
-            //}
-
-           hValue = (hValue + 1) % dataBaseSize;
-
+            counter++;
         }
 
         return notFound;
@@ -179,6 +178,9 @@ public class SimpleHashCCDatabase implements CCDatabase {
 
    private BucketOpen[] reSizeTable() {
 
+       System.out.println("accounts recived: " + dataBaseEntries);
+
+       int localentries = 0;
        int prevDBsize = dataBaseSize;
 
        dataBaseSize = nextPrime((dataBaseSize * 2));
@@ -186,23 +188,24 @@ public class SimpleHashCCDatabase implements CCDatabase {
        BucketOpen[] newAccountsTable = new BucketOpen[dataBaseSize];
 
        System.out.println("building new table with new size.." + dataBaseSize);
-       System.out.println("old DB size = " + dataBaseSize);
+       System.out.println("old DB size = " + prevDBsize);
 
        int bucket = 0;
        while(bucket < prevDBsize) {
            if(accountsTable[bucket] != null && !accountsTable[bucket].isDeleted()) {
 
-               int hValue = simpleHash(accountsTable[bucket].getAccountNumber());
+               //look for an open bucket via linear probing in the new hashTable
+               int index = search(accountsTable[bucket].getAccountNumber(), newAccountsTable);
 
-               //look for an open bucket via linear probing
-               while(newAccountsTable[hValue] != null) {
-                   hValue = (hValue + 1) % dataBaseSize;
+               if (newAccountsTable[index] == null || newAccountsTable[index].isDeleted()) {
+                   newAccountsTable[index] = accountsTable[bucket];
+                   localentries++;
                }
-               newAccountsTable[hValue] = accountsTable[bucket];
            }
            bucket++;
        }
 
+       System.out.println("accounts moved: " + localentries);
        return newAccountsTable;
    }
 
@@ -246,9 +249,6 @@ public class SimpleHashCCDatabase implements CCDatabase {
 
 
 }
-
-
-
 
 
 
